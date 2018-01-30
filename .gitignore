@@ -1,0 +1,4 @@
+templates/*config.yml
+
+!templates/archersaurus.config.yml
+!templates/*example.config.yml

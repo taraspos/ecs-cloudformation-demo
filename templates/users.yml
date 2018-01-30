@@ -1,0 +1,51 @@
+Resources:
+  TestUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: test-cf-user
+      Policies:
+      - PolicyName: ecr-push-access
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - ecr:GetDownloadUrlForLayer
+            - ecr:PutImage
+            - ecr:CompleteLayerUpload
+            - ecr:BatchGetImage
+            - ecr:InitiateLayerUpload
+            - ecr:BatchCheckLayerAvailability
+            - ecr:UploadLayerPart
+            Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/archersaurus
+          - Effect: Allow
+            Action:
+            - ecr:GetAuthorizationToken
+            Resource: '*'
+      - PolicyName: cloudformation-update-access
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - cloudformation:DescribeStackEvents
+            - cloudformation:UpdateStack
+            - cloudformation:CancelUpdateStack
+            - cloudformation:DescribeStacks 
+            Resource: !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/archersaurus/*
+  TestKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName:
+        !Ref TestUser
+  TestRepository: 
+    Type: "AWS::ECR::Repository"
+    Properties: 
+      RepositoryName: archersaurus
+Outputs:
+  AwsAccessKeyId:
+    Value: !Sub AWS_ACCESS_KEY_ID=${TestKey}
+  AasSecretAccessKey:
+    Value: !Sub AWS_SECRET_ACCESS_KEY=${TestKey.SecretAccessKey}
+  AwsRegion: 
+    Value: !Sub AWS_REGION=${AWS::Region}
+  ECR:
+    Value: !Ref TestRepository

@@ -1,0 +1,5 @@
+Parameters:
+  DesiredCapacity: 1
+  MaxSize: 1
+  ParentStack: parent
+  ImageTag: latest

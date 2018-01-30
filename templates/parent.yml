@@ -1,0 +1,345 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the ECS instances.
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Select a VPC that allows instances access to the Internet.
+  SubnetId:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Select at two subnets in your selected VPC.
+  DesiredCapacity:
+    Type: Number
+    Default: '1'
+    Description: Number of instances to launch in your ECS cluster.
+  MaxSize:
+    Type: Number
+    Default: '1'
+    Description: Maximum number of instances that can be launched in your ECS cluster.
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t2.xlarge
+      - t2.2xlarge
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - c3.large
+      - c3.xlarge
+      - c3.2xlarge
+      - c3.4xlarge
+      - c3.8xlarge
+      - t1.micro
+      - t2.nano
+      - m1.small
+      - m1.medium
+      - m1.large
+      - m1.xlarge
+      - c1.medium
+      - c1.xlarge
+      - c4.large
+      - c4.xlarge
+      - c4.2xlarge
+      - c4.4xlarge
+      - c4.8xlarge
+      - c5.large
+      - c5.xlarge
+      - c5.2xlarge
+      - c5.4xlarge
+      - c5.9xlarge
+      - c5.18xlarge
+      - m2.xlarge
+      - m2.2xlarge
+      - m2.4xlarge
+      - r4.large
+      - r4.xlarge
+      - r4.2xlarge
+      - r4.4xlarge
+      - r4.8xlarge
+      - r4.16xlarge
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+      - m4.16xlarge
+      - cc1.4xlarge
+      - cc2.8xlarge
+      - hi1.4xlarge
+      - hs1.8xlarge
+      - cr1.8xlarge
+      - g2.2xlarge
+      - g2.8xlarge
+      - p2.xlarge
+      - p2.8xlarge
+      - p2.16xlarge
+      - p3.2xlarge
+      - p3.8xlarge
+      - p3.16xlarge
+      - i2.xlarge
+      - i2.2xlarge
+      - i2.4xlarge
+      - i2.8xlarge
+      - i3.large
+      - i3.xlarge
+      - i3.2xlarge
+      - i3.4xlarge
+      - i3.8xlarge
+      - i3.16xlarge
+      - r3.large
+      - r3.xlarge
+      - r3.2xlarge
+      - r3.4xlarge
+      - r3.8xlarge
+      - d2.xlarge
+      - d2.2xlarge
+      - d2.4xlarge
+      - d2.8xlarge
+      - x1.16xlarge
+      - x1.32xlarge
+      - x1e.32xlarge
+      - f1.2xlarge
+      - f1.16xlarge
+      - g3.4xlarge
+      - g3.8xlarge
+      - g3.16xlarge
+      - h1.2xlarge
+      - h1.4xlarge
+      - h1.8xlarge
+      - h1.16xlarge
+      - m5.large
+      - m5.xlarge
+      - m5.2xlarge
+      - m5.4xlarge
+      - m5.12xlarge
+      - m5.24xlarge
+    ConstraintDescription: Please choose a valid instance type.
+Mappings:
+  AWSRegionToAMI:
+    us-east-1:
+      AMIID: ami-28456852
+    us-east-2:
+      AMIID: ami-ce1c36ab
+    us-west-1:
+      AMIID: ami-74262414
+    us-west-2:
+      AMIID: ami-decc7fa6
+    eu-west-1:
+      AMIID: ami-1d46df64
+    eu-west-2:
+      AMIID: ami-67cbd003
+    eu-west-3:
+      AMIID: ami-9aef59e7
+    eu-central-1:
+      AMIID: ami-509a053f
+    ap-northeast-1:
+      AMIID: ami-872c4ae1
+    ap-northeast-2:
+      AMIID: ami-c212b2ac
+    ap-southeast-1:
+      AMIID: ami-910d72ed
+    ap-southeast-2:
+      AMIID: ami-58bb443a
+    ca-central-1:
+      AMIID: ami-435bde27
+    ap-south-1:
+      AMIID: ami-00491f6f
+    sa-east-1:
+      AMIID: ami-af521fc3
+Resources:
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${AWS::StackName} Container Instances Security Group
+      VpcId: !Ref 'VpcId'
+  EcsSecurityGroupALBports:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref 'EcsSecurityGroup'
+      IpProtocol: tcp
+      FromPort: '31000'
+      ToPort: '61000'
+      SourceSecurityGroupId: !Ref 'ALBSG'
+  ALBSG:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: !Sub ${AWS::StackName} SG for ALB 
+      VpcId: !Ref 'VpcId'
+  ALBHTTPAccess:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref 'ALBSG'
+      IpProtocol: tcp
+      FromPort: '80'
+      ToPort: '80'
+      CidrIp: 0.0.0.0/0
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      LoadBalancerAttributes:
+      - Key: idle_timeout.timeout_seconds
+        Value: '30'
+      Subnets: !Ref 'SubnetId'
+      SecurityGroups: [!Ref 'ALBSG']
+  ALBListener80:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref 'DefaultTG'
+      LoadBalancerArn: !Ref 'ALB'
+      Port: '80'
+      Protocol: HTTP
+  DefaultTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Matcher:
+        HttpCode: 301
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId: !Ref VpcId
+      TargetType: instance
+      # Targets:
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 30
+  ECSAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref 'SubnetId'
+      LaunchConfigurationName: !Ref 'ContainerInstances'
+      MinSize: '1'
+      MaxSize: !Ref 'MaxSize'
+      DesiredCapacity: !Ref 'DesiredCapacity'
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: !Ref DesiredCapacity
+        MaxBatchSize: '1'
+        WaitOnResourceSignals: 'true'
+        PauseTime: PT10M
+  ContainerInstances:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap [AWSRegionToAMI, !Ref 'AWS::Region', AMIID]
+      SecurityGroups: [!Ref 'EcsSecurityGroup'] 
+      InstanceType: !Ref 'InstanceType'
+      IamInstanceProfile: !Ref 'EC2InstanceProfile'
+      KeyName: !Ref 'KeyName'
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            DeleteOnTermination: true
+            VolumeSize: 8
+            VolumeType: gp2
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash -xe
+          echo ECS_CLUSTER=${ECSCluster} >> /etc/ecs/ecs.config
+          yum install -y aws-cfn-bootstrap
+          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource ECSAutoScalingGroup --region ${AWS::Region}
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ec2.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ecs-service
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: ['ecs:CreateCluster', 'ecs:DeregisterContainerInstance', 'ecs:DiscoverPollEndpoint',
+              'ecs:Poll', 'ecs:RegisterContainerInstance', 'ecs:StartTelemetrySession',
+              'ecs:Submit*', 'logs:CreateLogStream', 'logs:PutLogEvents']
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - ecr:GetAuthorizationToken
+            Resource: '*'
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles: [!Ref 'EC2Role']
+  CFDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [cloudformation.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: permissions-to-update-resources
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 
+            - ecs:*
+            - elasticloadbalancing:*
+            - route53:*
+            - cloudwatch:*
+            - application-autoscaling:*
+            - iam:GetPolicyVersion
+            - iam:GetRole
+            - iam:PassRole
+            - iam:CreateRole
+            - iam:DeleteRole
+            - iam:DeleteRolePolicy
+            - iam:PutRolePolicy
+            - events:DescribeRule
+            - events:PutRule
+            - events:DeleteRule
+            Resource: '*'
+Outputs:
+  ECSCluster:
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub ${AWS::StackName}-ECSCluster
+  ALBArn:
+    Description:  ALB ARN
+    Value: !Ref ALB
+    Export:
+      Name: !Sub ${AWS::StackName}-ALBArn
+  ALBListener80:
+    Description:  ALB Listener 80 port ARN
+    Value: !Ref ALBListener80
+    Export:
+      Name: !Sub ${AWS::StackName}-ALBListener80
+  ECSInstanceRole:
+    Value: !Ref EC2Role
+    Export:
+      Name: !Sub ${AWS::StackName}-ECSInstanceRole 
+  VpcId:
+    Value: !Ref VpcId
+    Export:
+      Name: !Sub ${AWS::StackName}-VpcId
+  CFDeployRole:
+    Value: !GetAtt CFDeployRole.Arn

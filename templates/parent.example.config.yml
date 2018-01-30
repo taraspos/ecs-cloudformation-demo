@@ -1,0 +1,7 @@
+Parameters:
+  KeyName: id_rsa
+  VpcId: vpc-xxxxxxx
+  SubnetId: subnet-xxxxxx,subnet-xxxxxx
+  DesiredCapacity: 1
+  MaxSize: 1
+  InstanceType: t2.nano

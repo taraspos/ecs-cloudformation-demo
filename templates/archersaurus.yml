@@ -1,0 +1,293 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Parameters:
+  DesiredCapacity:
+    Type: Number
+    Default: '1'
+    Description: Number of containers to launch in your ECS cluster.
+  MaxSize:
+    Type: Number
+    Default: '1'
+    Description: Maximum number of instances that can be launched in your ECS cluster.
+  ImageTag:
+    Description: Application Docker Image Tag Version
+    Type: String
+  ParentStack:
+    Description: Name of parent CloudFormation stack, with defined ECS, ALB, etc.
+    Type: String
+Resources:
+  ECSServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [ecs.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: ecs-service
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: ['elasticloadbalancing:DeregisterInstancesFromLoadBalancer', 'elasticloadbalancing:DeregisterTargets',
+              'elasticloadbalancing:Describe*', 'elasticloadbalancing:RegisterInstancesWithLoadBalancer',
+              'elasticloadbalancing:RegisterTargets', 'ec2:Describe*', 'ec2:AuthorizeSecurityGroupIngress']
+            Resource: '*'
+  AutoscalingRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: [application-autoscaling.amazonaws.com]
+          Action: ['sts:AssumeRole']
+      Path: /
+      Policies:
+      - PolicyName: service-autoscaling
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: ['application-autoscaling:*', 'cloudwatch:DescribeAlarms', 'cloudwatch:PutMetricAlarm',
+              'ecs:DescribeServices', 'ecs:UpdateService']
+            Resource: '*'
+####  START OF ECS TASK CONFIGURATION
+  ECSTask:
+    Type: AWS::ECS::TaskDefinition
+    DeletionPolicy: Retain
+    Properties:
+      Family: !Sub ${AWS::StackName}
+      ContainerDefinitions:
+      - Name: archersaurus
+        Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/archersaurus:${ImageTag}
+        # Command: ["crash"]
+        Essential: 'true'
+        Memory: '150'
+        Cpu: '50'
+        PortMappings:
+        - ContainerPort: 8080
+####  END OF ECS TASK CONFIGURATION
+#### START OF SCALING AND BALANCING CONFIGURATIONS
+  ECSService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: 
+        Fn::ImportValue: !Sub ${ParentStack}-ECSCluster
+      DesiredCount: !Ref DesiredCapacity
+      LoadBalancers:
+      - ContainerName: archersaurus
+        ContainerPort: '8080'
+        TargetGroupArn: !Ref 'ECSTG'
+      Role: !Ref 'ECSServiceRole'
+      TaskDefinition: !Ref 'ECSTask'
+      PlacementStrategies:
+      - Type: spread
+        Field: attribute:ecs.availability-zone
+      - Type: spread
+        Field: instanceId
+  ServiceScalingTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    DependsOn: ECSService
+    Properties:
+      MaxCapacity: !Ref MaxSize
+      MinCapacity: !Ref DesiredCapacity
+      ResourceId: !Sub 
+        - service/${ECSCluster}/${ECSService.Name}
+        - ECSCluster: 
+            Fn::ImportValue : !Sub ${ParentStack}-ECSCluster
+      RoleARN: !GetAtt AutoscalingRole.Arn
+      ScalableDimension: ecs:service:DesiredCount
+      ServiceNamespace: ecs
+##### START of ScaleUP configuration
+  ServiceScalingPolicyUP:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: StepPolicyUp
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref 'ServiceScalingTarget'
+      StepScalingPolicyConfiguration:
+        AdjustmentType: PercentChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+        - MetricIntervalLowerBound: 0
+          ScalingAdjustment: 100
+  ServiceHighRAMUtilization:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '60'
+      AlarmDescription: Alarm if RAM usage > 60%
+      Period: '60'
+      AlarmActions: [!Ref 'ServiceScalingPolicyUP' ]
+      Namespace: AWS/ECS
+      Dimensions:
+      - Name: ServiceName
+        Value: !GetAtt ECSService.Name
+      - Name: ClusterName
+        Value:
+          Fn::ImportValue : !Sub ${ParentStack}-ECSCluster 
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: MemoryUtilization
+  ServiceHighCPUUtilization:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '60'
+      AlarmDescription: Alarm if CPU usage > 60%
+      Period: '60'
+      AlarmActions: [!Ref 'ServiceScalingPolicyUP']
+      Namespace: AWS/ECS
+      Dimensions:
+      - Name: ServiceName
+        Value: !GetAtt ECSService.Name
+      - Name: ClusterName
+        Value:
+          Fn::ImportValue : !Sub ${ParentStack}-ECSCluster 
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: CPUUtilization
+##### END of ScaleUP configuration
+##### START of ScaleDown configuration
+  ServiceScalingPolicyDown:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Properties:
+      PolicyName: StepPolicyDown
+      PolicyType: StepScaling
+      ScalingTargetId: !Ref 'ServiceScalingTarget'
+      StepScalingPolicyConfiguration:
+        AdjustmentType: PercentChangeInCapacity
+        Cooldown: 60
+        MetricAggregationType: Average
+        StepAdjustments:
+        - MetricIntervalLowerBound: 0
+          ScalingAdjustment: -100
+  ServiceLowRAMUtilization:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '20'
+      AlarmDescription: Alarm if RAM usage > 20%
+      Period: '60'
+      AlarmActions: [!Ref 'ServiceScalingPolicyDown']
+      Namespace: AWS/ECS
+      Dimensions:
+      - Name: ServiceName
+        Value: !GetAtt ECSService.Name
+      - Name: ClusterName
+        Value:
+          Fn::ImportValue : !Sub ${ParentStack}-ECSCluster 
+      ComparisonOperator: LessThanThreshold
+      MetricName: MemoryUtilization
+  ServiceLowCPUUtilization:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '20'
+      AlarmDescription: Alarm if CPU usage < 20%
+      Period: '60'
+      AlarmActions: [!Ref 'ServiceScalingPolicyDown']
+      Namespace: AWS/ECS
+      Dimensions:
+      - Name: ServiceName
+        Value: !GetAtt ECSService.Name
+      - Name: ClusterName
+        Value:
+          Fn::ImportValue : !Sub ${ParentStack}-ECSCluster 
+      ComparisonOperator: LessThanThreshold
+      MetricName: CPUUtilization
+##### END of ScaleDown configuration
+##### START of ALB configurations
+  ALBListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+      - Type: forward
+        TargetGroupArn: !Ref 'ECSTG'
+      Conditions:
+      - Field: path-pattern
+        Values: 
+        - /archersaurus*
+      ListenerArn: 
+        Fn::ImportValue: !Sub ${ParentStack}-ALBListener80
+      Priority: 1
+  ECSTG:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      Name: !Sub ${AWS::StackName}-tg
+      Port: 80
+      Protocol: HTTP
+      UnhealthyThresholdCount: 2
+      VpcId:
+        Fn::ImportValue: !Sub ${ParentStack}-VpcId
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 5
+##### END of ALB configurations
+##### END OF SCALING AND BALANCING CONFIGURATIONS
+  InstancePolicy:
+    Type: "AWS::IAM::Policy"
+    Properties:
+      PolicyName: !Sub ${AWS::StackName}-ecr-pull-access 
+      PolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action:
+          - 'ecr:GetDownloadUrlForLayer'
+          - 'ecr:BatchGetImage'
+          - 'ecr:BatchCheckLayerAvailability'
+          Resource:
+          - !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/archersaurus'
+      Roles:
+        - Fn::ImportValue: !Sub ${ParentStack}-ECSInstanceRole
+  TaskFailEventRule:
+    Type: "AWS::Events::Rule"
+    Properties:
+      Name: !Sub "${AWS::StackName}-task-fail"
+      Description: "Rule which keeps record of task exit events"
+      EventPattern: !Sub 
+        - | 
+            {
+              "source": [
+                "aws.ecs"
+              ],
+              "detail-type": [
+                "ECS Task State Change"
+              ],
+              "detail": {
+                "clusterArn": ["arn:aws:ecs:${AWS::Region}:${AWS::AccountId}:cluster/${ECSCluster}"],
+                "taskDefinitionArn": ["${ECSTask}"],
+                "stoppedReason": ["Essential container in task exited"]
+              }
+            }
+        - ECSCluster: 
+            Fn::ImportValue : !Sub ${ParentStack}-ECSCluster
+      State: ENABLED
+  TaskFailAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Sum
+      Threshold: '3'
+      AlarmDescription: Alarm if task exited 3 times per minute
+      Period: '60'
+      Namespace: AWS/Events
+      Dimensions:
+      - Name: RuleName
+        Value: !Ref TaskFailEventRule 
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      MetricName: TriggeredRules
+Outputs:
+  ECSService:
+    Value: !GetAtt ECSService.Name
+  TaskFailAlarmArn:
+    Value: !GetAtt TaskFailAlarm.Arn 
