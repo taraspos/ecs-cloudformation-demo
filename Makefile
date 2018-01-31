@@ -44,8 +44,8 @@ archersaurus: image
 		capabilities=CAPABILITY_IAM \
 		stack-file=templates/archersaurus.config.yml \
 		parameters=[ImageTag:latest,ParentStack:$(PARENT_STACK_NAME)] \
-		role=$$(awless show $$(awless list roles --filter name=CFDeployRole --ids) --values-for arn) \
-		rollback-triggers=$$(awless list alarms --filter name=TaskFailAlarm --ids)
+		role=$$(awless show $$(awless list roles --filter name=CFDeployRole --ids) --values-for arn)
+		# rollback-triggers=$$(awless list alarms --filter name=TaskFailAlarm --ids)
 
 # some helpers for demo
 repos:

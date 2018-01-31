@@ -17,7 +17,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err)
 	}
-	html := fmt.Sprintf(`<iframe src="%s" width="800" height="600" frameBorder="0" class="giphy-embed" allowFullScreen></iframe>`, gif)
+	_ = gif
+	// html := fmt.Sprintf(`<iframe src="%s" width="800" height="600" frameBorder="0" class="giphy-embed" allowFullScreen></iframe>`, gif)
+	html := "hello world"
 	fmt.Fprintf(w, html)
 }
 
