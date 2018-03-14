@@ -1,8 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Parameters:
-  KeyName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the ECS instances.
   VpcId:
     Type: AWS::EC2::VPC::Id
     Description: Select a VPC that allows instances access to the Internet.
@@ -245,7 +242,6 @@ Resources:
       SecurityGroups: [!Ref 'EcsSecurityGroup'] 
       InstanceType: !Ref 'InstanceType'
       IamInstanceProfile: !Ref 'EC2InstanceProfile'
-      KeyName: !Ref 'KeyName'
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
@@ -318,6 +314,13 @@ Resources:
             - events:PutRule
             - events:DeleteRule
             Resource: '*'
+  ASGTerminateHook:
+    Type: "AWS::AutoScaling::LifecycleHook"
+    Properties:
+      AutoScalingGroupName: !Ref ECSAutoScalingGroup
+      DefaultResult: "ABANDON"
+      HeartbeatTimeout: "900"
+      LifecycleTransition: "autoscaling:EC2_INSTANCE_TERMINATING"
 Outputs:
   ECSCluster:
     Value: !Ref ECSCluster

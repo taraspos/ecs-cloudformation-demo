@@ -61,7 +61,7 @@ Resources:
       ContainerDefinitions:
       - Name: archersaurus
         Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/archersaurus:${ImageTag}
-        Command: ["crash"]
+        # Command: ["crash"]
         Essential: 'true'
         Memory: '150'
         Cpu: '50'
@@ -99,109 +99,30 @@ Resources:
       RoleARN: !GetAtt AutoscalingRole.Arn
       ScalableDimension: ecs:service:DesiredCount
       ServiceNamespace: ecs
-##### START of ScaleUP configuration
-  ServiceScalingPolicyUP:
+  TargetCPUScaling:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: StepPolicyUp
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref 'ServiceScalingTarget'
-      StepScalingPolicyConfiguration:
-        AdjustmentType: PercentChangeInCapacity
-        Cooldown: 60
-        MetricAggregationType: Average
-        StepAdjustments:
-        - MetricIntervalLowerBound: 0
-          ScalingAdjustment: 100
-  ServiceHighRAMUtilization:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      EvaluationPeriods: '1'
-      Statistic: Average
-      Threshold: '60'
-      AlarmDescription: Alarm if RAM usage > 60%
-      Period: '60'
-      AlarmActions: [!Ref 'ServiceScalingPolicyUP' ]
-      Namespace: AWS/ECS
-      Dimensions:
-      - Name: ServiceName
-        Value: !GetAtt ECSService.Name
-      - Name: ClusterName
-        Value:
-          Fn::ImportValue : !Sub ${ParentStack}-ECSCluster 
-      ComparisonOperator: GreaterThanThreshold
-      MetricName: MemoryUtilization
-  ServiceHighCPUUtilization:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      EvaluationPeriods: '1'
-      Statistic: Average
-      Threshold: '60'
-      AlarmDescription: Alarm if CPU usage > 60%
-      Period: '60'
-      AlarmActions: [!Ref 'ServiceScalingPolicyUP']
-      Namespace: AWS/ECS
-      Dimensions:
-      - Name: ServiceName
-        Value: !GetAtt ECSService.Name
-      - Name: ClusterName
-        Value:
-          Fn::ImportValue : !Sub ${ParentStack}-ECSCluster 
-      ComparisonOperator: GreaterThanThreshold
-      MetricName: CPUUtilization
-##### END of ScaleUP configuration
-##### START of ScaleDown configuration
-  ServiceScalingPolicyDown:
+      PolicyName: TargetRAMScalePolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 50.0
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageCPUUtilization
+  TargetRAMScaling:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
     Properties:
-      PolicyName: StepPolicyDown
-      PolicyType: StepScaling
-      ScalingTargetId: !Ref 'ServiceScalingTarget'
-      StepScalingPolicyConfiguration:
-        AdjustmentType: PercentChangeInCapacity
-        Cooldown: 60
-        MetricAggregationType: Average
-        StepAdjustments:
-        - MetricIntervalLowerBound: 0
-          ScalingAdjustment: -100
-  ServiceLowRAMUtilization:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      EvaluationPeriods: '1'
-      Statistic: Average
-      Threshold: '20'
-      AlarmDescription: Alarm if RAM usage > 20%
-      Period: '60'
-      AlarmActions: [!Ref 'ServiceScalingPolicyDown']
-      Namespace: AWS/ECS
-      Dimensions:
-      - Name: ServiceName
-        Value: !GetAtt ECSService.Name
-      - Name: ClusterName
-        Value:
-          Fn::ImportValue : !Sub ${ParentStack}-ECSCluster 
-      ComparisonOperator: LessThanThreshold
-      MetricName: MemoryUtilization
-  ServiceLowCPUUtilization:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      EvaluationPeriods: '1'
-      Statistic: Average
-      Threshold: '20'
-      AlarmDescription: Alarm if CPU usage < 20%
-      Period: '60'
-      AlarmActions: [!Ref 'ServiceScalingPolicyDown']
-      Namespace: AWS/ECS
-      Dimensions:
-      - Name: ServiceName
-        Value: !GetAtt ECSService.Name
-      - Name: ClusterName
-        Value:
-          Fn::ImportValue : !Sub ${ParentStack}-ECSCluster 
-      ComparisonOperator: LessThanThreshold
-      MetricName: CPUUtilization
-##### END of ScaleDown configuration
-##### START of ALB configurations
+      PolicyName: TargetCPUScalePolicy
+      PolicyType: TargetTrackingScaling
+      ScalingTargetId: !Ref ServiceScalingTarget
+      TargetTrackingScalingPolicyConfiguration:
+        TargetValue: 50.0
+        ScaleInCooldown: 60
+        ScaleOutCooldown: 60
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ECSServiceAverageMemoryUtilization
   ALBListenerRule:
     Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
@@ -277,8 +198,8 @@ Resources:
     Properties:
       EvaluationPeriods: '1'
       Statistic: Sum
-      Threshold: '3'
-      AlarmDescription: Alarm if task exited 3 times per minute
+      Threshold: '2'
+      AlarmDescription: Alarm if task exited 2 times per minute
       Period: '60'
       Namespace: AWS/Events
       Dimensions:

@@ -2,23 +2,33 @@ ECR_REPO ?= $(shell awless list repositories --format json | jq -r '.[].URI' 2> 
 IMAGE_TAG ?= latest
 PARENT_STACK_NAME := parent
 USERS_STACK_NAME := test-users
-ECS_STACK_NAME ?= archersaurus
+STACK_NAME ?= archersaurus
 
 image:
 	awless --no-sync authenticate registry no-confirm=true --force
 	docker build -t $(ECR_REPO):$(IMAGE_TAG) .
 	docker push $(ECR_REPO):$(IMAGE_TAG)
 
-deploy:
-	awless update stack --no-sync --force \
-		name=$(ECS_STACK_NAME) \
-		template-file=templates/$(ECS_STACK_NAME).yml \
-		stack-file=templates/$(ECS_STACK_NAME).config.yml \
-		capabilities=CAPABILITY_IAM \
-		parameters=[ImageTag:$(IMAGE_TAG)]
+# building docker image version string, example:
+# hotfix123-ccccc-testing
+# (CodeShip is removing "/" from branch name, so we need to do that too)
+awless_deploy: VERSION=$(subst /,,$(CI_BRANCH))-$(CI_COMMIT_ID)-$(ENVIRONMENT)
+awless_deploy:
+	awless --no-sync --force \
+		update stack  \
+			name=$(STACK_NAME) \
+			capabilities=CAPABILITY_IAM \
+			template-file=$(STACK_TEMPLATE_FILE) \
+			stack-file=$(STACK_CONFIG_FILE) \
+			parameters=[ImageTag:$(VERSION)]
 
-watch:
-	awless tail stack-events $(ECS_STACK_NAME) --follow 
+awless_watch:
+	awless --no-sync \
+		tail stack-events $(STACK_NAME) \
+			--follow  \
+			--frequency=6s \
+			--timeout=10m \
+			--cancel-on-timeout
 
 # provision initial infrastructure
 users:
@@ -34,12 +44,19 @@ parent_create:
 		capabilities=CAPABILITY_IAM \
 		stack-file=templates/parent.config.yml
 
+parent_update:
+	awless update stack \
+		name=$(PARENT_STACK_NAME) \
+		template-file=templates/parent.yml \
+		capabilities=CAPABILITY_IAM \
+		stack-file=templates/parent.config.yml
+
 parent: parent_create
 	awless tail stack-events $(PARENT_STACK_NAME) --follow
 
 archersaurus: image
 	awless create stack \
-		name=$(ECS_STACK_NAME) \
+		name=$(STACK_NAME) \
 		template-file=templates/archersaurus.yml \
 		capabilities=CAPABILITY_IAM \
 		stack-file=templates/archersaurus.config.yml \
@@ -55,4 +72,17 @@ show_users_stack:
 	awless show $(USERS_STACK_NAME)
 
 show_ecs_stack:
-	awless show $(ECS_STACK_NAME)
+	awless show $(STACK_NAME)
+
+show_ecs_alarm:
+	awless list alarms --filter name=TaskFailAlarm --ids
+
+set_rollback_trigger: ROLLBACK_TRIGGER_ARN ?= $(shell awless list alarms --filter name=TaskFailAlarm --ids | head -n 1)
+set_rollback_trigger:
+	awless update stack \
+		name=$(STACK_NAME) \
+		use-previous-template=true \
+		capabilities=CAPABILITY_IAM \
+		stack-file=templates/archersaurus.config.yml \
+		rollback-triggers='$(ROLLBACK_TRIGGER_ARN)' \
+		parameters=[ImageTag:latest,ParentStack:$(PARENT_STACK_NAME)] 
