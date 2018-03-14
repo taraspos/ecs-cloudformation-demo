@@ -12,7 +12,7 @@ Parameters:
     Description: Number of instances to launch in your ECS cluster.
   MaxSize:
     Type: Number
-    Default: '1'
+    Default: '2'
     Description: Maximum number of instances that can be launched in your ECS cluster.
   InstanceType:
     Description: EC2 instance type
@@ -122,36 +122,36 @@ Parameters:
     ConstraintDescription: Please choose a valid instance type.
 Mappings:
   AWSRegionToAMI:
-    us-east-1:
-      AMIID: ami-28456852
     us-east-2:
-      AMIID: ami-ce1c36ab
-    us-west-1:
-      AMIID: ami-74262414
+      AMIID: ami-ef64528a
+    us-east-1:
+      AMIID: ami-cad827b7
     us-west-2:
-      AMIID: ami-decc7fa6
-    eu-west-1:
-      AMIID: ami-1d46df64
+      AMIID: ami-baa236c2
+    us-west-1:
+      AMIID: ami-29b8b249
     eu-west-2:
-      AMIID: ami-67cbd003
+      AMIID: ami-25f51242
     eu-west-3:
-      AMIID: ami-9aef59e7
+      AMIID: ami-0356e07e
+    eu-west-1:
+      AMIID: ami-64c4871d
     eu-central-1:
-      AMIID: ami-509a053f
-    ap-northeast-1:
-      AMIID: ami-872c4ae1
+      AMIID: ami-3b7d1354
     ap-northeast-2:
-      AMIID: ami-c212b2ac
-    ap-southeast-1:
-      AMIID: ami-910d72ed
+      AMIID: ami-3b19b455
+    ap-northeast-1:
+      AMIID: ami-bb5f13dd
     ap-southeast-2:
-      AMIID: ami-58bb443a
+      AMIID: ami-a677b6c4
+    ap-southeast-1:
+      AMIID: ami-f88ade84
     ca-central-1:
-      AMIID: ami-435bde27
+      AMIID: ami-db48cfbf
     ap-south-1:
-      AMIID: ami-00491f6f
+      AMIID: ami-9e91cff1
     sa-east-1:
-      AMIID: ami-af521fc3
+      AMIID: ami-da2c66b6
 Resources:
   ECSCluster:
     Type: AWS::ECS::Cluster
