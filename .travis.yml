@@ -9,6 +9,9 @@ env:
     - PATH=$PATH:/tmp/
     - AWLESS_VERSION=0.1.9
     - AWLESS_PACKAGE=awless-linux-386.tar.gz
+    - STACK_NAME=archersaurus
+    - STACK_TEMPLATE_FILE=templates/archersaurus.yml
+    - STACK_CONFIG_FILE=templates/archersaurus.config.yml 
 
 before_install:
   - wget --quiet https://github.com/wallix/awless/releases/download/v$AWLESS_VERSION/$AWLESS_PACKAGE
@@ -16,6 +19,6 @@ before_install:
 
 script:
   - make image
-  - make deploy
-  - make watch
+  - make awless_deploy 
+  - make awless_watch
 

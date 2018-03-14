@@ -9,10 +9,6 @@ image:
 	docker build -t $(ECR_REPO):$(IMAGE_TAG) .
 	docker push $(ECR_REPO):$(IMAGE_TAG)
 
-# building docker image version string, example:
-# hotfix123-ccccc-testing
-# (CodeShip is removing "/" from branch name, so we need to do that too)
-awless_deploy: VERSION=$(subst /,,$(CI_BRANCH))-$(CI_COMMIT_ID)-$(ENVIRONMENT)
 awless_deploy:
 	awless --no-sync --force \
 		update stack  \
@@ -20,7 +16,7 @@ awless_deploy:
 			capabilities=CAPABILITY_IAM \
 			template-file=$(STACK_TEMPLATE_FILE) \
 			stack-file=$(STACK_CONFIG_FILE) \
-			parameters=[ImageTag:$(VERSION)]
+			parameters=[ImageTag:$(IMAGE_TAG)]
 
 awless_watch:
 	awless --no-sync \
