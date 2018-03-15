@@ -61,7 +61,7 @@ Resources:
       ContainerDefinitions:
       - Name: archersaurus
         Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/archersaurus:${ImageTag}
-        # Command: ["crash"]
+        Command: ["crash"]
         Essential: 'true'
         Memory: '150'
         Cpu: '50'
